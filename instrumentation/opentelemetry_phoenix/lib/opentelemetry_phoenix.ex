@@ -15,6 +15,11 @@ defmodule OpentelemetryPhoenix do
                       type: :boolean,
                       default: true,
                       doc: "Whether LiveView traces will be instrumented."
+                    ],
+                    liveview_include_params: [
+                      type: {:or, [:boolean, {:fun, 1}]},
+                      default: false,
+                      doc: "Whether to include LiveView params into traces. Accepts filter function."
                     ]
                   )
 
@@ -82,7 +87,7 @@ defmodule OpentelemetryPhoenix do
     attach_router_dispatch_exception_handler()
 
     if opts[:liveview] do
-      attach_liveview_handlers()
+      attach_liveview_handlers(opts)
     end
 
     :ok
@@ -128,7 +133,7 @@ defmodule OpentelemetryPhoenix do
     )
   end
 
-  def attach_liveview_handlers do
+  def attach_liveview_handlers(opts) do
     :telemetry.attach_many(
       {__MODULE__, :live_view},
       [
@@ -146,7 +151,7 @@ defmodule OpentelemetryPhoenix do
         [:phoenix, :live_component, :handle_event, :exception]
       ],
       &__MODULE__.handle_liveview_event/4,
-      %{}
+      %{include_params: opts[:liveview_include_params]}
     )
 
     :ok
@@ -278,12 +283,15 @@ defmodule OpentelemetryPhoenix do
         [:phoenix, _live, :mount, :start],
         _measurements,
         meta,
-        _handler_configuration
+        config
       ) do
-    %{socket: socket} = meta
+    %{socket: socket, params: params, uri: url} = meta
     %{view: live_view} = socket
 
-    attributes = %{}
+    attributes = %{url: url}
+    attributes =
+      attributes
+      |> maybe_add_params(config, params)
 
     OpentelemetryTelemetry.start_telemetry_span(
       @tracer_id,
@@ -298,12 +306,15 @@ defmodule OpentelemetryPhoenix do
         [:phoenix, _live, :handle_params, :start],
         _measurements,
         meta,
-        _handler_configuration
+        config
       ) do
-    %{socket: socket} = meta
+    %{socket: socket, params: params, uri: url} = meta
     %{view: live_view} = socket
 
-    attributes = %{}
+    attributes = %{url: url}
+    attributes =
+      attributes
+      |> maybe_add_params(config, params)
 
     OpentelemetryTelemetry.start_telemetry_span(
       @tracer_id,
@@ -318,12 +329,15 @@ defmodule OpentelemetryPhoenix do
         [:phoenix, _live, :handle_event, :start],
         _measurements,
         meta,
-        _handler_configuration
+        config
       ) do
-    %{socket: socket, event: event, params: _params} = meta
+    %{socket: socket, event: event, params: params} = meta
     %{view: live_view} = socket
 
     attributes = %{}
+    attributes =
+      attributes
+      |> maybe_add_params(config, params)
 
     OpentelemetryTelemetry.start_telemetry_span(
       @tracer_id,
@@ -396,5 +410,37 @@ defmodule OpentelemetryPhoenix do
 
   defp adapter do
     Process.get({:otel_phoenix, :adapter})
+  end
+
+  defp maybe_add_params(attrs, %{include_params: false}, _params) do
+    attrs
+  end
+
+  defp maybe_add_params(attrs, %{include_params: true}, params) do
+    add_params(attrs, params)
+  end
+
+  defp maybe_add_params(attrs, %{include_params: params_filter}, params) when is_function(params_filter, 1) do
+    add_params(attrs, params_filter.(params))
+  end
+
+  defp add_params(attrs, params) do
+    attrs
+    |> Map.merge(params_to_attrs("params", params))
+  end
+
+  defp params_to_attrs(prefix, map) do
+    map
+    |> (Enum.reduce %{}, fn {key, v}, acc ->
+      new_prefix =
+        [prefix, key]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.join(".")
+        |> String.to_atom
+      case v do
+        val when is_map(val) -> Map.merge(acc, params_to_attrs(new_prefix, val))
+        val -> Map.put(acc, new_prefix, val)
+      end
+    end)
   end
 end
