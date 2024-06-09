@@ -50,7 +50,7 @@ defmodule OpentelemetryPhoenixTest do
                       attributes: attributes
                     )}
 
-    assert %{} == :otel_attributes.map(attributes)
+    assert %{url: "http://localhost:4000/live?foo=bar"} == :otel_attributes.map(attributes)
   end
 
   test "records spans for Phoenix LiveView handle_params" do
@@ -74,7 +74,7 @@ defmodule OpentelemetryPhoenixTest do
                       attributes: attributes
                     )}
 
-    assert %{} == :otel_attributes.map(attributes)
+    assert %{url: "http://localhost:4000/live?foo=bar"} == :otel_attributes.map(attributes)
   end
 
   test "records spans for Phoenix LiveView handle_event" do
@@ -134,7 +134,7 @@ defmodule OpentelemetryPhoenixTest do
                       attributes: attributes
                     )}
 
-    assert %{} == :otel_attributes.map(attributes)
+    assert %{url: "http://localhost:4000/live?foo=bar"} == :otel_attributes.map(attributes)
 
     assert_receive {:span,
                     span(
@@ -143,7 +143,7 @@ defmodule OpentelemetryPhoenixTest do
                       events: events
                     )}
 
-    assert %{} == :otel_attributes.map(attributes)
+    assert %{url: "http://localhost:4000/live?foo=bar"} == :otel_attributes.map(attributes)
 
     [
       event(
