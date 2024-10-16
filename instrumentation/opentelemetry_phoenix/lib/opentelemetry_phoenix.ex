@@ -166,7 +166,7 @@ defmodule OpentelemetryPhoenix do
         cowboy2_start()
 
       :bandit ->
-        bandit_start()
+        :ok
 
       _ ->
         default_start(meta)
@@ -174,11 +174,6 @@ defmodule OpentelemetryPhoenix do
   end
 
   defp cowboy2_start do
-    OpentelemetryProcessPropagator.fetch_parent_ctx()
-    |> OpenTelemetry.Ctx.attach()
-  end
-
-  defp bandit_start() do
     OpentelemetryProcessPropagator.fetch_parent_ctx()
     |> OpenTelemetry.Ctx.attach()
   end
